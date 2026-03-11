@@ -405,8 +405,39 @@ Example costs per AI action:
 
 ---
 
+## Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+**High-impact areas:**
+- AI pipeline prompts (better code generation quality)
+- New framework support (Vue, Svelte, etc.)
+- UI/UX improvements to the IDE
+- Build system and deployment improvements
+- Documentation and tutorials
+
+```bash
+# Quick start for contributors
+git clone https://github.com/dublyo/vibecoder.git
+cd vibecoder
+npm install
+cp .env.example .env   # Add your OpenRouter + GitHub keys
+npx prisma generate && npx prisma db push
+npm run dev
+```
+
+---
+
+## Community
+
+- **GitHub Issues** — [Report bugs & request features](https://github.com/dublyo/vibecoder/issues)
+- **GitHub Discussions** — [Ask questions & share ideas](https://github.com/dublyo/vibecoder/discussions)
+- **Star the repo** — Help others discover VibeCoder
+
+---
+
 ## License
 
-[Sustainable Use License](https://github.com/dublyo/vibecoder/blob/main/LICENSE.md) — a [fair-code](https://faircode.io) software license.
+[Sustainable Use License](LICENSE.md) — a [fair-code](https://faircode.io) software license.
 
-You can use VibeCoder freely for personal and commercial use. You can modify and self-host it. You cannot redistribute it as a competing product or offer it as a managed service without permission. Similar to [n8n](https://github.com/n8n-io/n8n).
+You can use VibeCoder freely for personal and commercial use. You can modify and self-host it. You cannot redistribute it as a competing product or offer it as a managed service without permission.
