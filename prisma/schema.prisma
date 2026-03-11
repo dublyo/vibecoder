@@ -1,0 +1,404 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  name              String
+  passwordHash      String
+  role              String   @default("member") // owner, admin, member
+  creditsBalance    Float    @default(0)
+  creditsMonthlyLimit Float  @default(1000)
+  isActive          Boolean  @default(true)
+  invitedById       String?
+  invitedBy         User?    @relation("UserInvites", fields: [invitedById], references: [id])
+  invitees          User[]   @relation("UserInvites")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  conversations     Conversation[]
+  messages          Message[]
+  creditTransactions CreditTransaction[]
+  projects          Project[]
+  skills            Skill[]
+  passwordResetTokens PasswordResetToken[]
+  sharedConversations SharedConversation[]
+  memories          Memory[] @relation("UserMemories")
+  mcpInstallations  McpInstallation[]
+  notebooks         Notebook[]
+  vcProjects        VcProject[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  emoji     String   @default("📁")
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  conversations Conversation[]
+}
+
+model Conversation {
+  id               String   @id @default(cuid())
+  title            String   @default("New Chat")
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId        String?
+  project          Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  chatType         String   @default("classic") // classic, multimodel, skilled, mcp, research, openbook
+  routingMode      String   @default("auto") // economy, balanced, premium, auto
+  skillId          String?
+  skill            Skill?   @relation(fields: [skillId], references: [id], onDelete: SetNull)
+  notebookId       String?  // links openbook chat to a notebook
+  notebook         Notebook? @relation(fields: [notebookId], references: [id], onDelete: SetNull)
+  activeModel      String?  // locked model for skilled chat or MM winner
+  totalCreditsUsed Float    @default(0)
+  messageCount     Int      @default(0)
+  contextSummary   String?  // rolling summary for context compression
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  messages Message[]
+  sharedWith SharedConversation[]
+  researchJobs ResearchJob[]
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  conversationId  String
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role            String   // user, assistant, system
+  content         String
+  modelUsed       String?  // e.g. "google/gemini-flash-2.0"
+  routingMode     String?  // which mode was active
+  routingTier     String?  // cheap, mid, premium
+  inputTokens     Int      @default(0)
+  outputTokens    Int      @default(0)
+  creditsCost     Float    @default(0)
+  confidenceScore Float?
+  wasEscalated    Boolean  @default(false)
+  escalatedFrom   String?  // original model before escalation
+  criticScore     Float?   // critic/verifier quality score (0-1)
+  pipelineLog     String?  // JSON: pipeline stages, models, timings
+  latencyMs       Int      @default(0)
+  groupId         String?  // links parallel multimodel responses together
+  createdAt       DateTime @default(now())
+}
+
+model CreditTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Float    // positive = add, negative = deduct
+  type        String   // allocation, usage, bonus, reset
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model Skill {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String
+  content     String   // The SKILL.md content (system prompt)
+  icon        String   @default("🔧")
+  category    String?
+  source      String   @default("custom") // custom, skills.sh, upload
+  sourceUrl   String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isPublic    Boolean  @default(false)
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  conversations Conversation[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+model SharedConversation {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sharedByName   String   // name of the admin who shared it
+  createdAt      DateTime @default(now())
+
+  @@unique([conversationId, userId])
+}
+
+model Memory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("UserMemories", fields: [userId], references: [id], onDelete: Cascade)
+  type        String   @default("semantic") // semantic, episodic
+  category    String   @default("general")
+  content     String   // The memory snippet
+  source      String?  // conversationId where this was extracted
+  confidence  Float    @default(0.8)
+  accessCount Int      @default(0)
+  lastUsedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model McpServer {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String
+  icon        String   @default("terminal")
+  url         String
+  category    String   @default("general")
+  isOfficial  Boolean  @default(false)
+  authType    String   @default("none")
+  authConfig  String?
+  toolCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  installations McpInstallation[]
+}
+
+model McpInstallation {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serverId      String?
+  server        McpServer? @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  customUrl     String?
+  customName    String?
+  credentials   String?
+  isActive      Boolean    @default(true)
+  budgetLimit   Float      @default(5)
+  cachedTools   String?
+  toolsCachedAt DateTime?
+  createdAt     DateTime   @default(now())
+
+  @@unique([userId, serverId])
+}
+
+model ResearchJob {
+  id              String   @id @default(cuid())
+  conversationId  String
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId          String
+  query           String
+  status          String   @default("pending")
+  planMessage     String?
+  depth           String   @default("standard")
+  keywords        String?
+  searchResults   String?
+  crawledPages    String?
+  summaries       String?
+  finalReport     String?
+  sources         String?
+  cheapModel      String?
+  maestroModel    String?
+  totalCredits    Float    @default(0)
+  serperCredits   Int      @default(0)
+  progress        Int      @default(0)
+  progressMessage String?
+  errorMessage    String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+}
+
+model Settings {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+// ═══════════════════════════════════════
+// OpenBook — Notebook LLM Alternative
+// ═══════════════════════════════════════
+
+model Notebook {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sources       NotebookSource[]
+  artifacts     NotebookArtifact[]
+  mapNodes      MapNode[]
+  mapEdges      MapEdge[]
+  conversations Conversation[]
+}
+
+model NotebookSource {
+  id           String   @id @default(cuid())
+  notebookId   String
+  notebook     Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  type         String   // file, url, text
+  title        String
+  fileName     String?
+  url          String?
+  mimeType     String?
+  rawContent   String   // extracted full text
+  summary      String?
+  wordCount    Int      @default(0)
+  tokenCount   Int      @default(0)
+  status       String   @default("pending")
+  errorMessage String?
+  pinned       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  chunks SourceChunk[]
+}
+
+model SourceChunk {
+  id         String         @id @default(cuid())
+  sourceId   String
+  source     NotebookSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  content    String
+  chunkIndex Int
+  embedding  String?
+  tokenCount Int      @default(0)
+  createdAt  DateTime @default(now())
+}
+
+model NotebookArtifact {
+  id           String   @id @default(cuid())
+  notebookId   String
+  notebook     Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  type         String   // summary, podcast, flashcards, mindmap, studyguide
+  title        String
+  content      String
+  metadata     String?
+  audioUrl     String?
+  status       String   @default("pending")
+  errorMessage String?
+  creditsUsed  Float    @default(0)
+  createdAt    DateTime @default(now())
+}
+
+model MapNode {
+  id          String   @id @default(cuid())
+  notebookId  String
+  notebook    Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  label       String
+  description String?
+  level       Int      @default(0)
+  sourceIds   String?
+  x           Float?
+  y           Float?
+  createdAt   DateTime @default(now())
+
+  outEdges MapEdge[] @relation("fromNode")
+  inEdges  MapEdge[] @relation("toNode")
+}
+
+model MapEdge {
+  id         String   @id @default(cuid())
+  notebookId String
+  notebook   Notebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  fromId     String
+  fromNode   MapNode  @relation("fromNode", fields: [fromId], references: [id], onDelete: Cascade)
+  toId       String
+  toNode     MapNode  @relation("toNode", fields: [toId], references: [id], onDelete: Cascade)
+  label      String?
+  weight     Float    @default(1.0)
+  createdAt  DateTime @default(now())
+}
+
+// ═══════════════════════════════════════
+// VibeCoder — AI Vibe-Coding IDE
+// ═══════════════════════════════════════
+
+model VcProject {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  slug            String    @unique
+  description     String?
+  framework       String    // nextjs, nuxt, astro, custom
+  template        String?
+  githubRepo      String    // e.g. "dublyo/vc-taskapp-abc123"
+  githubBranch    String    @default("main")
+  importedRepo    Boolean   @default(false)
+  subdomain       String    // e.g. "slug-taskapp.dublyo.co"
+  containerName   String?
+  portainerStackId Int?
+  port            Int?
+  status          String    @default("creating") // creating, active, building, deploying, error, paused
+  lastDeployedAt  DateTime?
+  deployToken     String?   // webhook auth token
+  cfDnsRecordId   String?   // Cloudflare DNS record ID
+  envVars         String?   @db.Text // JSON: { "KEY": "value", ... } — injected into container
+  plan            String?   @db.Text // AI-generated architectural plan (markdown)
+  fileTreeCache   String?   @db.Text
+  fileTreeUpdatedAt DateTime?
+  totalCreditsUsed Float    @default(0)
+  messageCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  messages    VcMessage[]
+  deployments VcDeployment[]
+}
+
+model VcMessage {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       VcProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  role          String    // user, assistant, system, error
+  content       String    @db.Text
+  tierUsed      String?   // direct, maestro
+  maestroPlan   String?   @db.Text
+  modelUsed     String?
+  inputTokens   Int       @default(0)
+  outputTokens  Int       @default(0)
+  creditsCost   Float     @default(0)
+  estimatedCost Float?
+  latencyMs     Int       @default(0)
+  filesChanged  String?   @db.Text // JSON array of file paths
+  createdAt     DateTime  @default(now())
+
+  deployments VcDeployment[]
+}
+
+model VcDeployment {
+  id               String    @id @default(cuid())
+  projectId        String
+  project          VcProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  messageId        String?
+  message          VcMessage? @relation(fields: [messageId], references: [id])
+  commitSha        String?
+  githubRunId      String?
+  status           String    @default("pending") // pending, building, deploying, live, failed
+  buildLog         String?   @db.Text
+  deployLog        String?   @db.Text
+  playwrightResult String?   @db.Text
+  consoleErrors    String?   @db.Text
+  errorType        String?   // lint, type, build, runtime, visual
+  autoFixAttempts  Int       @default(0)
+  createdAt        DateTime  @default(now())
+  completedAt      DateTime?
+}

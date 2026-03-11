@@ -1,0 +1,49 @@
+services:
+  app:
+    image: ghcr.io/dublyo/vibecoder:latest
+    container_name: vibecoder
+    restart: unless-stopped
+    environment:
+      # Database (PostgreSQL on same server)
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-vibecoder}:${POSTGRES_PASSWORD}@vc-postgres:5432/${POSTGRES_DB:-vibecoder}
+
+      # Redis (on same server)
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@vc-redis:6379
+
+      # Auth
+      - JWT_SECRET=${JWT_SECRET}
+
+      # App branding
+      - NEXT_PUBLIC_APP_NAME=VibeCoder
+
+      # AI — OpenRouter (300+ models)
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+
+      # AI — Google Gemini (direct)
+      - GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-}
+
+      # AI — OpenAI (direct, optional)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+
+      # Research — Serper.dev (web search)
+      - SERPER_API_KEY=${SERPER_API_KEY:-}
+
+      # Email (SMTP for password resets)
+      - EMAIL_SMTP_HOST=${EMAIL_SMTP_HOST:-}
+      - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-587}
+      - EMAIL_SMTP_USER=${EMAIL_SMTP_USER:-}
+      - EMAIL_SMTP_PASSWORD=${EMAIL_SMTP_PASSWORD:-}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@vibecode.new}
+      - EMAIL_SMTP_SECURE=${EMAIL_SMTP_SECURE:-false}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vibecoder.rule=HostRegexp(`vibecoder.{slug:[a-z0-9-]+}.dublyo.co`)"
+      - "traefik.http.routers.vibecoder.entrypoints=websecure"
+      - "traefik.http.routers.vibecoder.tls=true"
+      - "traefik.http.services.vibecoder.loadbalancer.server.port=3000"
+    networks:
+      - dublyo-public
+
+networks:
+  dublyo-public:
+    external: true

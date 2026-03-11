@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.env
+.env.local
+*.db
+*.db-journal
+dist/
+.vercel
+.DS_Store
+/public/audio/podcasts
+tsconfig.tsbuildinfo
