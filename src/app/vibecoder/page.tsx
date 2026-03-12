@@ -108,6 +108,10 @@ function VibecoderPage() {
   const fetchUser = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/me')
+      if (res.status === 401) {
+        router.push('/login')
+        return
+      }
       if (res.ok) {
         const data = await res.json()
         setCredits(data.user.creditsBalance)
@@ -115,7 +119,7 @@ function VibecoderPage() {
         setUserEmail(data.user.email)
       }
     } catch {}
-  }, [])
+  }, [router])
 
   useEffect(() => {
     const init = async () => {
