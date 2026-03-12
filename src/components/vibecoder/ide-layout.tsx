@@ -230,6 +230,7 @@ export function IdeLayout({ project, onProjectUpdate }: IdeLayoutProps) {
               projectUrl={`https://${project.subdomain}`}
               projectId={project.id}
               projectStatus={project.status}
+              framework={project.framework}
               generatedFiles={generatedFiles}
             />
           )}

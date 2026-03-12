@@ -11,6 +11,7 @@ interface BrowserTabProps {
   projectUrl: string
   projectId: string
   projectStatus: string
+  framework?: string
   generatedFiles?: Record<string, string>
 }
 
@@ -365,9 +366,10 @@ function toSandpackFiles(files: Record<string, string>): { files: Record<string,
   return { files: sandpackFiles, template: useTS ? 'react-ts' : 'react' }
 }
 
-export function BrowserTab({ projectUrl, projectId, projectStatus, generatedFiles }: BrowserTabProps) {
+export function BrowserTab({ projectUrl, projectId, projectStatus, framework, generatedFiles }: BrowserTabProps) {
+  const isSandpackCompatible = !framework || framework === 'nextjs'
   const [viewMode, setViewMode] = useState<ViewMode>('desktop')
-  const [previewMode, setPreviewMode] = useState<PreviewMode>('sandbox')
+  const [previewMode, setPreviewMode] = useState<PreviewMode>(isSandpackCompatible ? 'sandbox' : 'deployed')
   const [isLoading, setIsLoading] = useState(false)
   const [isDeployedLive, setIsDeployedLive] = useState(false)
   const [showConsole, setShowConsole] = useState(false)
@@ -602,7 +604,28 @@ export function BrowserTab({ projectUrl, projectId, projectStatus, generatedFile
             style={viewMode !== 'desktop' ? { width: VIEW_WIDTHS[viewMode], maxWidth: '100%' } : undefined}
           >
             {previewMode === 'sandbox' ? (
-              hasGeneratedCode ? (
+              !isSandpackCompatible ? (
+                <div className="h-full flex items-center justify-center text-gray-400">
+                  <div className="text-center px-8 py-12">
+                    <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
+                      <Globe className="w-8 h-8 text-gray-300 dark:text-gray-600" />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">
+                      {framework === 'nuxt' ? 'Nuxt' : framework === 'astro' ? 'Astro' : framework} preview
+                    </p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 max-w-[280px] leading-relaxed">
+                      Instant sandbox preview is available for Next.js/React projects. For {framework === 'nuxt' ? 'Nuxt' : framework === 'astro' ? 'Astro' : framework} projects, deploy first then use the <strong className="text-gray-500 dark:text-gray-400">Live</strong> tab to preview.
+                    </p>
+                    <button
+                      onClick={() => setPreviewMode('deployed')}
+                      className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/20 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors"
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      Switch to Live
+                    </button>
+                  </div>
+                </div>
+              ) : hasGeneratedCode ? (
                 <div className="h-full w-full flex flex-col">
                   <SandpackProvider
                     key={sandpackKey}
