@@ -391,7 +391,7 @@ export function ChatPanel({ projectId, projectName, onPipelineEvent, onFilesGene
 
   const quickActions = [
     { label: 'Polish', icon: Sparkles, prompt: 'Review the codebase and improve code quality, fix anti-patterns, optimize performance' },
-    { label: 'Fix', icon: Bug, prompt: 'Check for console errors and runtime issues, then fix them' },
+    { label: 'Fix', icon: Bug, prompt: 'Check for console errors and runtime issues, then fix them. IMPORTANT: Ignore errors from the Sandpack browser preview related to next-auth, openid-client, crypto, or Node.js server-only modules — those are Sandpack limitations (browser sandbox cannot run server-side code) and are NOT real bugs. Focus only on actual code bugs, UI issues, and build errors.' },
     { label: 'Test', icon: Play, prompt: 'Run Playwright tests on the live site and report results' },
     { label: 'Deploy', icon: Rocket, prompt: '__deploy__' },
   ]

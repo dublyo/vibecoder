@@ -302,6 +302,12 @@ CONTAINER & LOCAL DEV FILES (include on first generation or when creating a new 
 - ALWAYS output a README.md with Quick Start, Docker, and Tech Stack sections
 - These files ensure the app works both locally and in container deployment
 
+SANDPACK PREVIEW LIMITATIONS (do NOT try to fix these):
+- The user sees an instant browser preview via Sandpack (a browser-based code sandbox)
+- Sandpack CANNOT run Node.js server-side code: next-auth, openid-client, crypto, Prisma, Redis, API routes
+- Errors like "Cannot read properties of undefined (reading 'isKeyObject')" from openid-client/next-auth are EXPECTED Sandpack limitations — NOT real bugs
+- If the user reports errors from the preview/sandbox, check if they are Sandpack limitations before attempting to fix. Focus on actual code and build errors.
+
 NEVER MODIFY these files (they are managed by the platform):
 ${getFrameworkNeverModify(framework)}`
 }
@@ -441,6 +447,12 @@ CONTAINER & LOCAL DEV FILES (include on first generation or when creating a new 
 - ALWAYS output a .env.example listing every env var the app needs with placeholder values
 - ALWAYS output a README.md with Quick Start, Docker, and Tech Stack sections
 - These files ensure the app works both locally and in container deployment
+
+SANDPACK PREVIEW LIMITATIONS (do NOT try to fix these):
+- The user sees an instant browser preview via Sandpack (a browser-based code sandbox)
+- Sandpack CANNOT run Node.js server-side code: next-auth, openid-client, crypto, Prisma, Redis, API routes
+- Errors like "Cannot read properties of undefined (reading 'isKeyObject')" from openid-client/next-auth are EXPECTED Sandpack limitations — NOT real bugs
+- If the user reports errors from the preview/sandbox, check if they are Sandpack limitations before attempting to fix. Focus on actual code and build errors.
 
 NEVER MODIFY these files (they are managed by the platform):
 ${getFrameworkNeverModify(framework)}`

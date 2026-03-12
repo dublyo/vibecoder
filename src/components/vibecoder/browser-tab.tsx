@@ -165,6 +165,15 @@ export function Roboto() { return { className: '' }; }
 export function Open_Sans() { return { className: '' }; }
 export function Poppins() { return { className: '' }; }
 export default function googleFont() { return { className: '' }; }`,
+  '/next-auth.js': `export default function NextAuth() { return { handlers: { GET() {}, POST() {} }, auth: async () => null, signIn: async () => {}, signOut: async () => {} }; }
+export function getServerSession() { return Promise.resolve(null); }`,
+  '/next-auth/react.js': `import React from 'react';
+export function useSession() { return { data: null, status: 'unauthenticated' }; }
+export function signIn() { return Promise.resolve(); }
+export function signOut() { return Promise.resolve(); }
+export function SessionProvider({ children }) { return children; }
+export function getCsrfToken() { return Promise.resolve(''); }`,
+  '/@auth/prisma-adapter.js': `export function PrismaAdapter() { return {}; }`,
 }
 
 /**
@@ -326,17 +335,31 @@ function toSandpackFiles(files: Record<string, string>): { files: Record<string,
     }
   }
 
-  // Inject Next.js shims if any file imports from next/*
+  // Inject Next.js shims if any file imports from next/* or next-auth
   const allContent = Object.values(sandpackFiles).join('\n')
-  if (/from\s+['"]next\//.test(allContent)) {
+  if (/from\s+['"]next\//.test(allContent) || /from\s+['"]next-auth/.test(allContent) || /from\s+['"]@auth\//.test(allContent)) {
     for (const [shimPath, shimContent] of Object.entries(NEXTJS_SHIMS)) {
       sandpackFiles[shimPath] = shimContent
     }
   }
 
-  // Remove Next.js layout.tsx / loading.tsx / error.tsx — Sandpack doesn't use them
-  for (const skip of ['/layout.tsx', '/layout.jsx', '/loading.tsx', '/error.tsx', '/not-found.tsx']) {
-    delete sandpackFiles[skip]
+  // Remove server-only files that can't run in Sandpack (Node.js APIs, auth config, API routes, middleware)
+  const serverOnlyPatterns = [
+    /\/layout\.(tsx|jsx)$/,
+    /\/loading\.(tsx|jsx)$/,
+    /\/error\.(tsx|jsx)$/,
+    /\/not-found\.(tsx|jsx)$/,
+    /\/api\//, // API routes need Node.js
+    /\/auth\.(ts|js|tsx|jsx)$/, // auth.ts / auth.js (next-auth config)
+    /\/middleware\.(ts|js)$/, // Next.js middleware
+    /\/lib\/auth/, // auth utility files
+    /\/server\//, // server-only code
+    /prisma/, // Prisma client needs Node.js
+  ]
+  for (const key of Object.keys(sandpackFiles)) {
+    if (serverOnlyPatterns.some(p => p.test(key))) {
+      delete sandpackFiles[key]
+    }
   }
 
   return { files: sandpackFiles, template: useTS ? 'react-ts' : 'react' }
