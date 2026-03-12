@@ -10,7 +10,55 @@ import type { FileContext } from './file-context'
 
 const PLAN_MODEL = 'deepseek/deepseek-chat-v3-0324'
 
-const PLANNER_PROMPT = `You are Maestro Planner, a senior software architect for a vibe-coding IDE.
+function buildPlannerPrompt(framework: string): string {
+  const fwName = framework === 'nuxt' ? 'Nuxt 4' : framework === 'astro' ? 'Astro 6' : 'Next.js 16'
+  const fwPatterns = framework === 'nuxt'
+    ? `- Use Nuxt 4 file-based routing (pages/ directory) and server routes (server/api/).
+- Nuxt auto-imports Vue composables and components from components/.
+- Use <script setup lang="ts"> in all Vue SFCs.
+- Use useFetch() or useAsyncData() for data fetching in pages/components.
+- Use lucide-vue-next for icons.
+- Server routes use defineEventHandler, readBody, getQuery, createError (auto-imported from h3).
+- Environment variables via useRuntimeConfig() in server routes.`
+    : framework === 'astro'
+    ? `- Use Astro 6 file-based routing (src/pages/).
+- .astro pages are server-rendered by default (zero JS). Use React islands with client:load for interactivity.
+- Create React components in src/components/ for interactive parts.
+- API routes at src/pages/api/ export GET/POST functions.
+- Use lucide-react for icons in React islands.
+- Environment variables via import.meta.env.`
+    : `- Use Next.js App Router patterns (app/ directory, server components, route handlers).
+- Use lucide-react for icons.
+- Access environment variables via process.env (server) or NEXT_PUBLIC_ prefix (client).`
+
+  const fwDeps = framework === 'nuxt'
+    ? `nuxt@^4.2.0, vue@^3.6.0, typescript@^5.9.0, tailwindcss@^4.2.0, @nuxtjs/tailwindcss@^7.0.0, lucide-vue-next@^0.577.0, prisma@^7.5.0, @prisma/client@^7.5.0`
+    : framework === 'astro'
+    ? `astro@^6.0.0, @astrojs/react@^5.0.0, @astrojs/tailwind@^7.0.0, react@^19.2.0, react-dom@^19.2.0, typescript@^5.9.0, tailwindcss@^4.2.0, lucide-react@^0.577.0, prisma@^7.5.0, @prisma/client@^7.5.0`
+    : `next@^16.1.0, react@^19.2.0, react-dom@^19.2.0, typescript@^5.9.0, tailwindcss@^4.2.0, @tailwindcss/postcss@^4.2.0, lucide-react@^0.577.0, prisma@^7.5.0, @prisma/client@^7.5.0, next-auth@^4.24.0`
+
+  const fwBuildRules = framework === 'nuxt'
+    ? `- nuxt.config.ts is the central config file. Do NOT create nuxt.config.js.
+- Add "postinstall": "prisma generate" to package.json scripts when using Prisma.
+- Dockerfile MUST have: RUN npx prisma generate (before npm run build).
+- All component exports: Vue SFCs are auto-imported from components/, no explicit export needed.`
+    : framework === 'astro'
+    ? `- astro.config.ts is the central config. Include react() and tailwind() integrations.
+- For SSR, set output: 'server' in astro.config.ts.
+- Add "postinstall": "prisma generate" to package.json scripts when using Prisma.
+- Dockerfile MUST have: RUN npx prisma generate (before npm run build).
+- React components need client:load directive when used in .astro pages.`
+    : `- next.config.ts MUST include: output: 'standalone', typescript: { ignoreBuildErrors: true }, eslint: { ignoreDuringBuilds: true }
+- Pages that fetch DB data MUST have: export const dynamic = 'force-dynamic'
+- Dockerfile MUST have: RUN npx prisma generate (before npm run build)
+- All component exports must use NAMED exports (export { Foo }) not just export default
+- NextAuth v5 route: ONLY export GET and POST, no other named exports
+- Tailwind CSS v4: src/app/globals.css with @import "tailwindcss" (NOT @tailwind directives). postcss.config.mjs uses @tailwindcss/postcss plugin. No tailwind.config needed.`
+
+  const ignoreDirs = framework === 'nuxt' ? '.nuxt, .output' : framework === 'astro' ? 'dist' : '.next'
+
+  return `You are Maestro Planner, a senior software architect for a vibe-coding IDE.
+The project uses ${fwName}.
 
 Your job is to create a detailed, actionable implementation plan for a full-stack application.
 You have access to web research results about best practices.
@@ -44,37 +92,32 @@ List all pages and key components with brief descriptions.
 
 RULES:
 - Be specific, not generic. Include actual model names, field names, route paths.
-- Use Next.js App Router patterns (app/ directory, server components, route handlers).
+${fwPatterns}
 - Use Prisma ORM for database access.
 - Use Tailwind CSS v4 for styling — write all UI from scratch, do NOT plan for shadcn/ui, @radix-ui, or headless UI.
-- Use lucide-react for icons.
 - Include proper auth, validation, and error handling in the plan.
 - The plan should be comprehensive enough that another AI can follow it to build the entire app.
 - ALWAYS use the LATEST stable package versions. Current versions (March 2026):
-  next@^16.1.0, react@^19.2.0, react-dom@^19.2.0, typescript@^5.9.0, tailwindcss@^4.2.0, @tailwindcss/postcss@^4.2.0, lucide-react@^0.577.0, prisma@^7.5.0, @prisma/client@^7.5.0, next-auth@^4.24.0
+  ${fwDeps}
 
 BUILD REQUIREMENTS (include in Implementation Steps):
-- next.config.ts MUST include: output: 'standalone', typescript: { ignoreBuildErrors: true }, eslint: { ignoreDuringBuilds: true }
-- Pages that fetch DB data MUST have: export const dynamic = 'force-dynamic'
-- Dockerfile MUST have: RUN npx prisma generate (before npm run build)
-- All component exports must use NAMED exports (export { Foo }) not just export default
-- NextAuth v5 route: ONLY export GET and POST, no other named exports
-- Tailwind CSS v4: src/app/globals.css with @import "tailwindcss" (NOT @tailwind directives). postcss.config.mjs uses @tailwindcss/postcss plugin. No tailwind.config needed.
+${fwBuildRules}
 
 CONTAINER & LOCAL DEV (include in File Structure and Implementation Steps):
 - docker-compose.yml: app service with build context, env_file: [".env"], ports 3000:3000, restart: unless-stopped. Add postgres/redis services if needed.
-- .dockerignore: node_modules, .next, .git, *.md, .env*.local, npm-debug.log, .DS_Store, dist, coverage, .turbo
-- .env.example: list ALL env vars with placeholder values (DATABASE_URL, REDIS_URL, NEXTAUTH_SECRET, API keys, etc.)
+- .dockerignore: node_modules, ${ignoreDirs}, .git, *.md, .env*.local, npm-debug.log, .DS_Store, dist, coverage
+- .env.example: list ALL env vars with placeholder values (DATABASE_URL, REDIS_URL, auth secrets, API keys, etc.)
 - README.md: Quick Start (clone, cp .env.example .env, npm install, prisma generate if needed, npm run dev), Docker section (docker compose up --build), Tech Stack list`
+}
 
 /** Generate 3 search queries from the user's request for research */
-function generateSearchQueries(message: string): string[] {
-  // Extract key topics and generate targeted search queries
+function generateSearchQueries(message: string, framework: string = 'nextjs'): string[] {
+  const fwKeyword = framework === 'nuxt' ? 'nuxt vue' : framework === 'astro' ? 'astro' : 'nextjs'
   const words = message.toLowerCase()
   const queries: string[] = []
 
   // Always search for the core app type + best practices
-  queries.push(`${message.slice(0, 80)} nextjs app architecture best practices 2026`)
+  queries.push(`${message.slice(0, 80)} ${fwKeyword} app architecture best practices 2026`)
 
   // Database/schema query
   if (words.includes('database') || words.includes('postgres') || words.includes('prisma') ||
@@ -84,7 +127,7 @@ function generateSearchQueries(message: string): string[] {
   }
 
   // UI/UX query
-  queries.push(`${message.split(' ').slice(0, 5).join(' ')} UI design patterns modern nextjs`)
+  queries.push(`${message.split(' ').slice(0, 5).join(' ')} UI design patterns modern ${fwKeyword}`)
 
   return queries.slice(0, 3)
 }
@@ -93,6 +136,7 @@ function generateSearchQueries(message: string): string[] {
 export async function researchForPlan(
   message: string,
   publishEvent: (event: PipelineEvent) => void,
+  framework: string = 'nextjs',
 ): Promise<string> {
   publishEvent({ event: 'phase_start', data: { phase: 'researching', description: 'Researching best practices...' } })
 
@@ -104,7 +148,7 @@ export async function researchForPlan(
     return ''
   }
 
-  const queries = generateSearchQueries(message)
+  const queries = generateSearchQueries(message, framework)
   publishEvent({ event: 'thinking_detail', data: { phase: 'researching', detail: `Searching: ${queries.join(', ')}` } })
 
   try {
@@ -147,6 +191,7 @@ export async function generatePlan(
   researchContext: string,
   fileContext: FileContext,
   publishEvent: (event: PipelineEvent) => void,
+  framework: string = 'nextjs',
 ): Promise<string> {
   const apiKey = await getOpenRouterKey()
   if (!apiKey) throw new Error('OpenRouter API key not configured')
@@ -165,7 +210,7 @@ export async function generatePlan(
     : 'none'
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: PLANNER_PROMPT },
+    { role: 'system', content: buildPlannerPrompt(framework) },
     {
       role: 'user',
       content: `USER REQUEST:

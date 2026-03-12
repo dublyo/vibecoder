@@ -11,13 +11,47 @@ import { prisma } from '../db'
 
 const MAX_FIX_ATTEMPTS = 5
 
-const FIX_PROMPT = `You are an expert code fixer for a vibe-coding IDE. You receive build/test errors and must fix them.
+function buildFixPrompt(framework: string): string {
+  const fwSpecificErrors = framework === 'nuxt'
+    ? `CRITICAL — Nuxt build / Prisma errors:
+- If the error mentions "PrismaClientInitializationError" during build:
+  Ensure server/utils/db.ts has a proper singleton and is only used in server/ routes.
+- If the error mentions module resolution issues with auto-imports:
+  Check that the component exists in components/ or the composable exists in composables/.
+- For icons, ALWAYS use lucide-vue-next. Do NOT use @heroicons/vue or other icon libraries.
+- Use Vue SFCs with <script setup lang="ts">, not JSX.`
+    : framework === 'astro'
+    ? `CRITICAL — Astro build errors:
+- If the error mentions "PrismaClientInitializationError" during build:
+  Ensure src/lib/db.ts has a proper singleton and is only used in --- frontmatter --- or API routes.
+- If the error mentions "client:load" on an .astro component:
+  client directives only work on framework components (React, Vue), NOT on .astro components.
+- For icons, use lucide-react in React islands. Do NOT use @heroicons/react or react-icons.
+- React components must be in .tsx files and mounted with client:load in .astro pages.`
+    : `CRITICAL — Next.js build / Prisma / SSG errors:
+- If the error mentions "Validation Error" + "schema.prisma" or "PrismaClientInitializationError" during build:
+  This means a Server Component tries to query the database during static generation (SSG).
+  Fix by adding "export const dynamic = 'force-dynamic'" to the page that imports the DB-querying component.
+- If the error mentions "not a valid Route export field" (e.g. "authOptions"):
+  Next.js 15 App Router only allows GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS exports in route files.
+  Remove any extra exports (like authOptions, config, etc). Use: const handler = NextAuth({...}); export { handler as GET, handler as POST }
+- If the error is about CSS "Module not found: Can't resolve './globals.css'":
+  Fix the import path in layout.tsx to match the actual location (e.g. '../styles/globals.css')
+- ALWAYS output next.config.ts with typescript: { ignoreBuildErrors: true } and eslint: { ignoreDuringBuilds: true } when fixing type errors
+- If Prisma is used and Dockerfile doesn't have "npx prisma generate", output an updated Dockerfile with it`
+
+  const componentStyle = framework === 'nuxt'
+    ? `- ALWAYS write Vue SFCs (.vue) with <template>, <script setup lang="ts">, NEVER raw HTML files`
+    : `- ALWAYS write React JSX/TSX components, NEVER raw HTML files`
+
+  return `You are an expert code fixer for a vibe-coding IDE. The project uses ${framework === 'nuxt' ? 'Nuxt 4' : framework === 'astro' ? 'Astro 6' : 'Next.js 16'}.
+You receive build/test errors and must fix them.
 
 You have full context of the project files and the error output. Fix the issue and respond with:
 1. A brief explanation of what went wrong and how you fixed it (1-2 sentences)
 2. The complete updated file(s) using this format:
 
-\`\`\`file:path/to/file.tsx
+\`\`\`file:path/to/file.${framework === 'nuxt' ? 'vue' : 'tsx'}
 // complete file content here
 \`\`\`
 
@@ -29,14 +63,14 @@ Rules:
 - If the error is a type mismatch, fix the types
 - If the error is a syntax error, fix the syntax
 - If the error is "Module not found" for a package, ALSO output an updated package.json with the missing dependency added
-- For icons, ALWAYS use lucide-react (e.g. import { Home, Settings } from 'lucide-react'). Do NOT use @heroicons/react or react-icons.
+- For icons, use ${framework === 'nuxt' ? 'lucide-vue-next' : 'lucide-react'}. Do NOT use @heroicons or react-icons.
 - EVERY npm package you import MUST be in package.json. If it's missing, output an updated package.json.
 - If the error is "404 Not Found" or "ETARGET" or "not in this registry", the package does NOT EXIST. REMOVE it from package.json and rewrite the code to not use it.
-- DO NOT use @radix-ui packages (they often don't exist or have version issues). Use plain HTML + Tailwind CSS instead.
+- DO NOT use @radix-ui packages. Use plain HTML + Tailwind CSS instead.
 - For UI components, write them from scratch using Tailwind CSS. Do NOT depend on shadcn/ui, @radix-ui, or headless UI libraries.
 - Maintain existing code style
 - Include all imports
-- ALWAYS write React JSX/TSX components, NEVER raw HTML files
+${componentStyle}
 - Use inline styles or Tailwind classes for styling
 
 CRITICAL — Export/Import mismatches ("is not exported" errors):
@@ -45,35 +79,21 @@ CRITICAL — Export/Import mismatches ("is not exported" errors):
 - When fixing, also check ALL other files that import from the same module — fix them ALL at once
 - Best practice: always provide both named and default export: export { Foo }; export default Foo
 
-CRITICAL — Next.js build / Prisma / SSG errors:
-- If the error mentions "Validation Error" + "schema.prisma" or "PrismaClientInitializationError" during build:
-  This means a Server Component tries to query the database during static generation (SSG).
-  Fix by adding "export const dynamic = 'force-dynamic'" to the page that imports the DB-querying component.
-- If the error mentions "not a valid Route export field" (e.g. "authOptions"):
-  Next.js 15 App Router only allows GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS exports in route files.
-  Remove any extra exports (like authOptions, config, etc). Use: const handler = NextAuth({...}); export { handler as GET, handler as POST }
-- If the error is about CSS "Module not found: Can't resolve './globals.css'":
-  Fix the import path in layout.tsx to match the actual location (e.g. '../styles/globals.css')
-- ALWAYS output next.config.ts with typescript: { ignoreBuildErrors: true } and eslint: { ignoreDuringBuilds: true } when fixing type errors
-- If Prisma is used and Dockerfile doesn't have "npx prisma generate", output an updated Dockerfile with it
+${fwSpecificErrors}
 
 CRITICAL — Dependency version conflicts (ERESOLVE / peer dependency errors):
 - If the error contains "ERESOLVE", "peer dep", "Could not resolve dependency", or version conflicts:
   1. Read the error carefully to identify which packages have incompatible versions
   2. ALWAYS output an updated package.json that resolves the conflict
-  3. Use COMPATIBLE version ranges. Common combos:
-     - next@^16.x requires react@^19.2.0, react-dom@^19.2.0, @types/react@^19.2.0, @types/react-dom@^19.2.0
-     - next@^15.x requires react@^19.0.0, react-dom@^19.0.0, @types/react@^19, @types/react-dom@^19
-  4. PREFER upgrading to latest compatible versions (next@^16.1.0 + react@^19.2.0)
-  5. Make sure ALL react-related deps (@types/react, @types/react-dom) match the react major version
-  6. Also output an updated Dockerfile with \`RUN npm install --legacy-peer-deps\` if the error is from Docker build
-- NEVER downgrade next.js below ^15.0.0 or react below ^19.0.0
+  3. PREFER upgrading to latest compatible versions
+  4. Also output an updated Dockerfile with \`RUN npm install --legacy-peer-deps\` if the error is from Docker build
 
 CRITICAL — GitHub Actions workflow:
 - NEVER modify .github/workflows/deploy.yml
 - NEVER add test jobs, lint jobs, or any extra jobs to the workflow
 - The workflow only has a Docker build job — leave it alone
 - If the error is from a "test" job (npm ci, npm test), IGNORE it — focus only on Docker build errors`
+}
 
 interface RalphLoopOptions {
   projectId: string
@@ -212,7 +232,7 @@ async function generateFix(
   const structuredErrors = extractBuildErrors(errorOutput)
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: FIX_PROMPT },
+    { role: 'system', content: buildFixPrompt(framework) },
     {
       role: 'user',
       content: `Project: ${framework}

@@ -88,9 +88,164 @@ export function parseFileChanges(text: string): FileChange[] {
   return changes
 }
 
-// ─── DIRECT TIER ───────────────────────────────────────────
+// ─── FRAMEWORK-SPECIFIC INSTRUCTIONS ──────────────────────
 
-const DIRECT_CODER_PROMPT = `You are a precise code editor for a vibe-coding IDE. You receive a coding request and the current file contents.
+function getFrameworkRouting(framework: string): string {
+  switch (framework) {
+    case 'nuxt':
+      return `- For multi-page apps, create SEPARATE page files using Nuxt file-based routing:
+  pages/index.vue (homepage), pages/about.vue, pages/listings/index.vue, pages/dashboard.vue, etc.
+  Each page file is a Vue SFC with <template>, <script setup lang="ts">, and optional <style>.
+  Use <NuxtLink to="/path"> for navigation. Nuxt auto-imports components from components/ directory.`
+    case 'astro':
+      return `- For multi-page apps, create SEPARATE page files using Astro file-based routing:
+  src/pages/index.astro (homepage), src/pages/about.astro, src/pages/listings/index.astro, etc.
+  Astro pages use --- frontmatter --- for server logic and HTML/JSX below.
+  For interactive islands, create React components in src/components/ and use client:load directive:
+  <MyComponent client:load /> — this hydrates the component on page load.
+  Use <a href="/path"> for navigation between pages.`
+    default: // nextjs
+      return `- For multi-page apps, create SEPARATE page files for each route using Next.js App Router convention:
+  src/app/page.tsx (homepage), src/app/about/page.tsx, src/app/listings/page.tsx, src/app/dashboard/page.tsx, etc.
+  Each page file should export default a React component. The sandbox preview auto-routes between them.`
+  }
+}
+
+function getFrameworkDeps(framework: string): string {
+  switch (framework) {
+    case 'nuxt':
+      return `- ALWAYS use the LATEST stable versions of all packages. Current versions (March 2026):
+  nuxt@^4.2.0, vue@^3.6.0, typescript@^5.9.0, tailwindcss@^4.2.0, @nuxtjs/tailwindcss@^7.0.0, lucide-vue-next@^0.577.0, prisma@^7.5.0, @prisma/client@^7.5.0, @sidebase/nuxt-auth@^0.10.0
+- For icons, ALWAYS use lucide-vue-next (e.g. import { Home, Settings, User } from 'lucide-vue-next'). Do NOT use @heroicons/vue or other icon libraries.`
+    case 'astro':
+      return `- ALWAYS use the LATEST stable versions of all packages. Current versions (March 2026):
+  astro@^6.0.0, @astrojs/react@^5.0.0, @astrojs/tailwind@^7.0.0, react@^19.2.0, react-dom@^19.2.0, typescript@^5.9.0, tailwindcss@^4.2.0, lucide-react@^0.577.0, prisma@^7.5.0, @prisma/client@^7.5.0
+- For icons in React islands, use lucide-react. For Astro pages, use inline SVGs or lucide-react in client:load islands.`
+    default:
+      return `- ALWAYS use the LATEST stable versions of all packages. Current versions (March 2026):
+  next@^16.1.0, react@^19.2.0, react-dom@^19.2.0, typescript@^5.9.0, tailwindcss@^4.2.0, @tailwindcss/postcss@^4.2.0, lucide-react@^0.577.0, prisma@^7.5.0, @prisma/client@^7.5.0, next-auth@^4.24.0
+- For icons, ALWAYS use lucide-react (e.g. import { Home, Settings, User } from 'lucide-react'). Do NOT use @heroicons/react, react-icons, or other icon libraries.`
+  }
+}
+
+function getFrameworkBackend(framework: string): string {
+  switch (framework) {
+    case 'nuxt':
+      return `BACKEND & API SUPPORT:
+- Create Nuxt server routes at server/api/[resource].ts or server/api/[resource]/index.ts
+- Server routes use defineEventHandler: export default defineEventHandler(async (event) => { ... })
+- Read body with readBody(event), query with getQuery(event), params with event.context.params
+- Return data directly (auto-serialized to JSON), throw createError({ statusCode, message }) for errors
+- Nuxt auto-imports: defineEventHandler, readBody, getQuery, createError, getRequestIP, etc. — do NOT import from 'h3'
+- For database needs, use Prisma: create server/utils/db.ts with PrismaClient singleton
+- Access environment variables via useRuntimeConfig() in server routes, or runtimeConfig in nuxt.config.ts
+- Client-side env vars use runtimeConfig.public.* (defined in nuxt.config.ts under runtimeConfig.public)
+- Create server/utils/db.ts for shared database client, server/utils/redis.ts for Redis client
+- IMPORTANT: When introducing new npm packages, ALWAYS output a package.json with all dependencies.`
+    case 'astro':
+      return `BACKEND & API SUPPORT:
+- Create Astro API routes at src/pages/api/[resource].ts
+- API routes export named functions: export async function GET({ request }) and POST/PUT/DELETE
+- Return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } })
+- For SSR API routes, ensure astro.config.ts has output: 'server' or output: 'hybrid'
+- For database needs, use Prisma: create src/lib/db.ts with PrismaClient singleton
+- Access environment variables via import.meta.env.KEY_NAME (public: PUBLIC_ prefix, server: no prefix)
+- Create src/lib/db.ts for shared database client, src/lib/redis.ts for Redis client
+- IMPORTANT: When introducing new npm packages, ALWAYS output a package.json with all dependencies.`
+    default:
+      return `BACKEND & API SUPPORT:
+- When user asks for API routes, create Next.js API routes at api/route.ts or api/[resource]/route.ts
+- API route files use: export async function GET/POST/PUT/DELETE(request: Request)
+- For database needs, use Prisma patterns: import { PrismaClient } from '@prisma/client'
+- Create prisma/schema.prisma when user needs a database schema
+- For data fetching in components, use fetch('/api/...') with proper error handling
+- Access environment variables via process.env.KEY_NAME (server-side) or NEXT_PUBLIC_ prefix (client-side)
+- Create lib/db.ts for shared database client instances
+- Support Redis patterns: import { createClient } from 'redis'
+- IMPORTANT: When introducing new npm packages (prisma, redis, etc), ALWAYS output a package.json file with the required dependencies. If one already exists in the project, add to it. If not, create one with name, version, scripts (dev, build, start), and all needed dependencies.`
+  }
+}
+
+function getFrameworkBuildRules(framework: string): string {
+  switch (framework) {
+    case 'nuxt':
+      return `NUXT BUILD RULES:
+- nuxt.config.ts is the central config — define runtimeConfig, modules, css, etc. there
+- Nuxt auto-imports Vue composables (ref, computed, watch, etc.) and Nuxt composables (useRoute, useFetch, useAsyncData, etc.) — do NOT import them manually
+- Components in components/ are auto-imported — do NOT import them in pages or other components
+- Use <script setup lang="ts"> in all Vue SFCs — this is the recommended Nuxt 4 pattern
+- For data fetching, use useFetch('/api/...') or useAsyncData() — NOT raw fetch() in components
+- Tailwind CSS: use @nuxtjs/tailwindcss module, configure in nuxt.config.ts modules array
+- When using Prisma, add "postinstall": "prisma generate" to package.json scripts`
+    case 'astro':
+      return `ASTRO BUILD RULES:
+- astro.config.ts is the central config — define integrations (react, tailwind), output mode, etc.
+- Astro pages (.astro files) are server-rendered by default — NO JavaScript shipped to client
+- For interactivity, use React components with client:load, client:idle, or client:visible directives
+- NEVER add client directives to .astro components — only to framework components (React, Vue, etc.)
+- Use --- frontmatter --- in .astro files for server-side imports, data fetching, and logic
+- Astro supports both static (output: 'static') and SSR (output: 'server') modes
+- For dynamic routes, use [...slug].astro or [id].astro with getStaticPaths() (static) or params (SSR)
+- When using Prisma, add "postinstall": "prisma generate" to package.json scripts`
+    default:
+      return `NEXT.JS BUILD RULES:
+- Pages/components that fetch data from a database (Prisma, etc.) MUST add: export const dynamic = 'force-dynamic'
+  This prevents Next.js from trying to render them at build time when no DB is available.
+- next.config.ts MUST include: typescript: { ignoreBuildErrors: true } and eslint: { ignoreDuringBuilds: true }
+  This prevents type-only errors (like NextAuth beta types) from blocking the build.
+- CSS imports in layout.tsx must use correct relative paths (e.g. '../styles/globals.css', NOT './globals.css' if the CSS is in a different directory)
+- When using Prisma, the Dockerfile MUST include: RUN npx prisma generate (before npm run build)
+- NextAuth v5 (next-auth@^5) route files must ONLY export GET and POST. Do NOT export authOptions or any other named export — Next.js 15 will reject it.
+- For NextAuth v5 routes: const handler = NextAuth({...}); export { handler as GET, handler as POST }`
+  }
+}
+
+function getFrameworkComponentRules(framework: string): string {
+  switch (framework) {
+    case 'nuxt':
+      return `- Components are Vue SFCs (.vue) with <template>, <script setup lang="ts">, optional <style>
+- SPLIT code into multiple files: create separate components in components/ (e.g. components/Header.vue, components/Footer.vue, components/ProductCard.vue)
+- Components in components/ are auto-imported — use them directly in templates without import statements
+- Use Vue 3 Composition API: ref(), computed(), watch(), onMounted(), etc. (auto-imported by Nuxt)
+- Use Tailwind classes in templates, NOT separate CSS files
+- For layouts, create layouts/default.vue with <slot /> — pages auto-use it`
+    case 'astro':
+      return `- Astro pages (.astro) use HTML-like syntax with --- frontmatter --- for server logic
+- For interactive components, create React components in src/components/ (.tsx files)
+- SPLIT code: Astro pages for layout/routing, React components for interactive islands
+- React components MUST be mounted with client:load (or client:idle, client:visible) in .astro files
+- Static content should be in .astro files (zero JS), interactive parts in React islands
+- Use Tailwind classes, NOT separate CSS files
+- Shared layouts go in src/layouts/Layout.astro with <slot /> for content`
+    default:
+      return `- App.tsx MUST have \`export default function App()\` — it is the entry point
+- Other component files MUST use \`export default function ComponentName()\`
+- SPLIT code into multiple files: create separate files for distinct components (e.g. components/Header.tsx, components/Footer.tsx, components/ProductCard.tsx)
+- App.tsx should import and compose components from other files
+- ALWAYS write React JSX/TSX (export default function), NEVER raw HTML
+- Use inline styles or Tailwind classes, not separate CSS files`
+  }
+}
+
+function getFrameworkNeverModify(framework: string): string {
+  const base = `- .github/workflows/deploy.yml — NEVER touch the CI/CD workflow. Do NOT add test jobs, lint jobs, or extra steps.
+- Dockerfile — only modify if fixing a Docker build error. Never add test stages.`
+  switch (framework) {
+    case 'nuxt':
+      return `${base}
+- nuxt.config.ts — it already has the correct SSR and build settings. Do NOT create nuxt.config.js.`
+    case 'astro':
+      return `${base}
+- astro.config.ts — it already has the correct integrations and output mode. Do NOT create astro.config.mjs.`
+    default:
+      return `${base}
+- next.config.ts — it already has output: 'standalone'. Do NOT create next.config.js (it would override next.config.ts).`
+  }
+}
+
+function buildDirectCoderPrompt(framework: string): string {
+  return `You are a precise code editor for a vibe-coding IDE. You receive a coding request and the current file contents.
+The project uses the ${framework === 'nuxt' ? 'Nuxt 4' : framework === 'astro' ? 'Astro 6' : 'Next.js 16'} framework.
 
 Respond in TWO parts:
 
@@ -100,46 +255,28 @@ Write 1-3 sentences explaining what you changed and why. Use a numbered list if 
 **Part 2 — File outputs** (parsed automatically):
 Output each changed file using EXACTLY this format:
 
-\`\`\`file:path/to/file.tsx
+\`\`\`file:path/to/file.${framework === 'nuxt' ? 'vue' : framework === 'astro' ? 'astro' : 'tsx'}
 // complete file content here
 \`\`\`
 
 CRITICAL RULES:
-- You MUST use \`\`\`file:path format. Example: \`\`\`file:App.tsx
-- Do NOT use \`\`\`tsx or \`\`\`typescript — always \`\`\`file:filename
-- App.tsx MUST have \`export default function App()\` — it is the entry point
-- Other component files MUST use \`export default function ComponentName()\`
-- SPLIT code into multiple files: create separate files for distinct components (e.g. components/Header.tsx, components/Footer.tsx, components/ProductCard.tsx)
-- App.tsx should import and compose components from other files
-- For multi-page apps, create SEPARATE page files for each route using Next.js App Router convention:
-  src/app/page.tsx (homepage), src/app/about/page.tsx, src/app/listings/page.tsx, src/app/dashboard/page.tsx, etc.
-  Each page file should export default a React component. The sandbox preview auto-routes between them.
+- You MUST use \`\`\`file:path format. Example: \`\`\`file:${framework === 'nuxt' ? 'pages/index.vue' : framework === 'astro' ? 'src/pages/index.astro' : 'App.tsx'}
+- Do NOT use \`\`\`tsx or \`\`\`typescript or \`\`\`vue — always \`\`\`file:filename
+${getFrameworkComponentRules(framework)}
+${getFrameworkRouting(framework)}
 - Output COMPLETE file content (not diffs), including all imports
 - Only output files that need changes
-- ALWAYS write React JSX/TSX (export default function), NEVER raw HTML
-- Use inline styles or Tailwind classes, not separate CSS files
 - Keep changes minimal and focused
 
 DEPENDENCY RULES:
-- ALWAYS use the LATEST stable versions of all packages. Current versions (March 2026):
-  next@^16.1.0, react@^19.2.0, react-dom@^19.2.0, typescript@^5.9.0, tailwindcss@^4.2.0, @tailwindcss/postcss@^4.2.0, lucide-react@^0.577.0, prisma@^7.5.0, @prisma/client@^7.5.0, next-auth@^4.24.0
-- For icons, ALWAYS use lucide-react (e.g. import { Home, Settings, User } from 'lucide-react'). Do NOT use @heroicons/react, react-icons, or other icon libraries.
+${getFrameworkDeps(framework)}
 - EVERY npm package you import MUST be listed in package.json. If you import a new package, you MUST also output an updated package.json with it in dependencies.
-- Prefer built-in browser APIs and React patterns over adding new packages when possible.
+- Prefer built-in APIs and framework patterns over adding new packages when possible.
 - DO NOT use @radix-ui packages, shadcn/ui, or headless UI. Write UI components from scratch using Tailwind CSS.
 - Only use packages you are CERTAIN exist on npm. If unsure, write the code yourself instead of importing a library.
 - Tailwind CSS v4 uses @import "tailwindcss" in CSS (NOT @tailwind directives). PostCSS config uses @tailwindcss/postcss plugin. No tailwind.config needed — use CSS variables and @theme for customization.
 
-BACKEND & API SUPPORT:
-- When user asks for API routes, create Next.js API routes at api/route.ts or api/[resource]/route.ts
-- API route files use: export async function GET/POST/PUT/DELETE(request: Request)
-- For database needs, use Prisma patterns: import { PrismaClient } from '@prisma/client'
-- Create prisma/schema.prisma when user needs a database schema
-- For data fetching in components, use fetch('/api/...') with proper error handling
-- Access environment variables via process.env.KEY_NAME (server-side) or NEXT_PUBLIC_ prefix (client-side)
-- Create lib/db.ts for shared database client instances
-- Support Redis patterns: import { createClient } from 'redis'
-- IMPORTANT: When introducing new npm packages (prisma, redis, etc), ALWAYS output a package.json file with the required dependencies. If one already exists in the project, add to it. If not, create one with name, version, scripts (dev, build, start), and all needed dependencies.
+${getFrameworkBackend(framework)}
 
 EXPORT/IMPORT RULES:
 - ALWAYS use NAMED exports for reusable components: export { Button } or export function Button()
@@ -148,15 +285,7 @@ EXPORT/IMPORT RULES:
 - NEVER mix default exports and named imports — they will cause "is not exported" build errors
 - Be consistent: if importing as { Foo }, export as { Foo }. If importing as Foo, use export default.
 
-NEXT.JS BUILD RULES:
-- Pages/components that fetch data from a database (Prisma, etc.) MUST add: export const dynamic = 'force-dynamic'
-  This prevents Next.js from trying to render them at build time when no DB is available.
-- next.config.ts MUST include: typescript: { ignoreBuildErrors: true } and eslint: { ignoreDuringBuilds: true }
-  This prevents type-only errors (like NextAuth beta types) from blocking the build.
-- CSS imports in layout.tsx must use correct relative paths (e.g. '../styles/globals.css', NOT './globals.css' if the CSS is in a different directory)
-- When using Prisma, the Dockerfile MUST include: RUN npx prisma generate (before npm run build)
-- NextAuth v5 (next-auth@^5) route files must ONLY export GET and POST. Do NOT export authOptions or any other named export — Next.js 15 will reject it.
-- For NextAuth v5 routes: const handler = NextAuth({...}); export { handler as GET, handler as POST }
+${getFrameworkBuildRules(framework)}
 
 CONTAINER & LOCAL DEV FILES (include on first generation or when creating a new app):
 - ALWAYS output a docker-compose.yml with:
@@ -168,38 +297,22 @@ CONTAINER & LOCAL DEV FILES (include on first generation or when creating a new 
   - If using Prisma/Postgres, add a postgres service with POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB from env vars
   - If using Redis, add a redis service
   - Use a shared network for all services
-- ALWAYS output a .dockerignore with: node_modules, .next, .git, *.md, .env*.local, npm-debug.log, .DS_Store, dist, coverage, .turbo
-- ALWAYS output a .env.example listing every env var the app needs with placeholder values:
-  - DATABASE_URL=postgresql://user:password@localhost:5432/mydb
-  - REDIS_URL=redis://localhost:6379
-  - NEXTAUTH_SECRET=your-secret-here
-  - NEXTAUTH_URL=http://localhost:3000
-  - Any API keys as YOUR_API_KEY_HERE
-- ALWAYS output a README.md with these sections:
-  # App Name
-  Brief description.
-  ## Quick Start (local development)
-  1. Clone the repo
-  2. Copy .env.example to .env and fill in values
-  3. npm install
-  4. npx prisma generate && npx prisma db push (if using Prisma)
-  5. npm run dev → opens http://localhost:3000
-  ## Docker
-  1. Copy .env.example to .env and fill in values
-  2. docker compose up --build
-  ## Tech Stack
-  List frameworks, DB, auth, etc.
+- ALWAYS output a .dockerignore with: node_modules, ${framework === 'nextjs' ? '.next' : framework === 'nuxt' ? '.nuxt, .output' : 'dist'}, .git, *.md, .env*.local, npm-debug.log, .DS_Store, coverage
+- ALWAYS output a .env.example listing every env var the app needs with placeholder values
+- ALWAYS output a README.md with Quick Start, Docker, and Tech Stack sections
 - These files ensure the app works both locally and in container deployment
 
 NEVER MODIFY these files (they are managed by the platform):
-- .github/workflows/deploy.yml — NEVER touch the CI/CD workflow. Do NOT add test jobs, lint jobs, or extra steps.
-- Dockerfile — only modify if fixing a Docker build error. Never add test stages.
-- next.config.ts — it already has output: 'standalone'. Do NOT create next.config.js (it would override next.config.ts).`
+${getFrameworkNeverModify(framework)}`
+}
+
+// ─── DIRECT TIER ───────────────────────────────────────────
 
 async function executeDirectPipeline(
   fileContext: FileContext,
   message: string,
   publishEvent: (event: PipelineEvent) => void,
+  framework: string = 'nextjs',
 ): Promise<PipelineResult> {
   const apiKey = await getOpenRouterKey()
   if (!apiKey) throw new Error('OpenRouter API key not configured')
@@ -218,7 +331,7 @@ async function executeDirectPipeline(
     .join('\n')
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: DIRECT_CODER_PROMPT },
+    { role: 'system', content: buildDirectCoderPrompt(framework) },
     {
       role: 'user',
       content: `Project file tree:\n${treeStr}\n\nCurrent files:\n${contextStr}\n\nUser request: ${message}`,
@@ -265,7 +378,9 @@ async function executeDirectPipeline(
 
 // ─── MAESTRO TIER ──────────────────────────────────────────
 
-const MAESTRO_PLANNER_PROMPT = `You are Maestro, an AI architect for a vibe-coding IDE.
+function buildMaestroPrompt(framework: string): string {
+  return `You are Maestro, an AI architect for a vibe-coding IDE.
+The project uses the ${framework === 'nuxt' ? 'Nuxt 4' : framework === 'astro' ? 'Astro 6' : 'Next.js 16'} framework.
 Break down the user's coding request into a plan, then implement ALL the changes yourself.
 
 Respond in TWO parts:
@@ -276,49 +391,32 @@ Write a brief numbered plan (2-5 steps) of what you'll change. Do NOT include co
 **Part 2 — File outputs** (parsed automatically):
 Output each file using EXACTLY this format:
 
-\`\`\`file:path/to/file.tsx
+\`\`\`file:path/to/file.${framework === 'nuxt' ? 'vue' : framework === 'astro' ? 'astro' : 'tsx'}
 // complete file content here
 \`\`\`
 
 CRITICAL RULES:
-- You MUST use \`\`\`file:path format. Example: \`\`\`file:App.tsx
-- Do NOT use \`\`\`tsx or \`\`\`typescript — always \`\`\`file:filename
-- App.tsx MUST have \`export default function App()\` — it is the entry point
-- Other component files MUST use \`export default function ComponentName()\`
+- You MUST use \`\`\`file:path format. Example: \`\`\`file:${framework === 'nuxt' ? 'pages/index.vue' : framework === 'astro' ? 'src/pages/index.astro' : 'App.tsx'}
+- Do NOT use \`\`\`tsx or \`\`\`typescript or \`\`\`vue — always \`\`\`file:filename
 - ALWAYS split code into MULTIPLE FILES with proper component architecture:
-  - Put each major UI section in its own file (e.g. components/Header.tsx, components/Hero.tsx, components/ProductGrid.tsx, components/Footer.tsx)
+  - Put each major UI section in its own file (e.g. components/Header.${framework === 'nuxt' ? 'vue' : 'tsx'}, components/Hero.${framework === 'nuxt' ? 'vue' : 'tsx'}, etc.)
   - Put shared types in types.ts, utilities in utils.ts, constants/data in data.ts
-  - App.tsx should be a thin orchestrator that imports and composes components
-- For multi-page apps, create SEPARATE page files for EVERY route using Next.js App Router convention:
-  src/app/page.tsx (homepage), src/app/listings/page.tsx, src/app/dashboard/page.tsx, etc.
-  Every link in the navbar MUST have a corresponding page file. The sandbox preview auto-routes between them.
+${getFrameworkComponentRules(framework)}
+${getFrameworkRouting(framework)}
+  Every link in the navbar MUST have a corresponding page file.
 - Output COMPLETE file content (not diffs), including all imports
 - Ensure files work together (consistent naming, proper imports between files)
-- ALWAYS write React JSX/TSX (export default function), NEVER raw HTML
-- Use inline styles or Tailwind classes, not separate CSS files
 - Follow the project's existing patterns
 
 DEPENDENCY RULES:
-- ALWAYS use the LATEST stable versions of all packages. Current versions (March 2026):
-  next@^16.1.0, react@^19.2.0, react-dom@^19.2.0, typescript@^5.9.0, tailwindcss@^4.2.0, @tailwindcss/postcss@^4.2.0, lucide-react@^0.577.0, prisma@^7.5.0, @prisma/client@^7.5.0, next-auth@^4.24.0
-- For icons, ALWAYS use lucide-react (e.g. import { Home, Settings, BarChart3, User, ArrowUp, ArrowDown } from 'lucide-react'). Do NOT use @heroicons/react, react-icons, or other icon libraries.
+${getFrameworkDeps(framework)}
 - EVERY npm package you import MUST be listed in package.json. If you import a new package, you MUST also output an updated package.json with it in dependencies.
-- Prefer built-in browser APIs and React patterns over adding new packages when possible.
+- Prefer built-in APIs and framework patterns over adding new packages when possible.
 - DO NOT use @radix-ui packages, shadcn/ui, or headless UI. Write UI components from scratch using Tailwind CSS.
 - Only use packages you are CERTAIN exist on npm. If unsure, write the code yourself instead of importing a library.
 - Tailwind CSS v4 uses @import "tailwindcss" in CSS (NOT @tailwind directives). PostCSS config uses @tailwindcss/postcss plugin. No tailwind.config needed — use CSS variables and @theme for customization.
 
-BACKEND & API SUPPORT:
-- When user asks for API routes, create Next.js API routes at api/route.ts or api/[resource]/route.ts
-- API route files use: export async function GET/POST/PUT/DELETE(request: Request)
-- For database needs, use Prisma ORM patterns with proper schema definitions
-- Create prisma/schema.prisma when user needs a database schema
-- For data fetching in components, use fetch('/api/...') with proper error handling
-- Access environment variables via process.env.KEY_NAME (server-side) or NEXT_PUBLIC_ prefix (client-side)
-- Create lib/db.ts for shared database client, lib/redis.ts for Redis client
-- Support full-stack patterns: React frontend + Next.js API routes + Prisma DB + Redis cache
-- When generating API routes, include proper error handling, input validation, and status codes
-- IMPORTANT: When introducing new npm packages (prisma, redis, etc), ALWAYS output a package.json file with the required dependencies. If one already exists in the project, add to it. If not, create one with name, version, scripts (dev, build, start), and all needed dependencies.
+${getFrameworkBackend(framework)}
 
 EXPORT/IMPORT RULES:
 - ALWAYS use NAMED exports for reusable components: export { Button } or export function Button()
@@ -327,17 +425,7 @@ EXPORT/IMPORT RULES:
 - NEVER mix default exports and named imports — they will cause "is not exported" build errors
 - Be consistent: if importing as { Foo }, export as { Foo }. If importing as Foo, use export default.
 
-NEXT.JS BUILD RULES:
-- Pages/components that fetch data from a database (Prisma, etc.) MUST add: export const dynamic = 'force-dynamic'
-  This prevents Next.js from trying to render them at build time when no DB is available.
-- next.config.ts MUST include: typescript: { ignoreBuildErrors: true } and eslint: { ignoreDuringBuilds: true }
-  This prevents type-only errors (like NextAuth beta types) from blocking the build.
-- CSS imports in layout.tsx must use correct relative paths (e.g. '../styles/globals.css', NOT './globals.css' if the CSS is in a different directory)
-- When using Prisma, the Dockerfile MUST include: RUN npx prisma generate (before npm run build)
-- NextAuth v5 (next-auth@^5) route files must ONLY export GET and POST. Do NOT export authOptions or any other named export — Next.js 15 will reject it.
-- For NextAuth v5 routes: const handler = NextAuth({...}); export { handler as GET, handler as POST }
-- ALWAYS output next.config.ts with: output: 'standalone', typescript: { ignoreBuildErrors: true }, eslint: { ignoreDuringBuilds: true }
-- ALWAYS output Dockerfile with: RUN npx prisma generate (before RUN npm run build) and RUN apk add --no-cache libc6-compat openssl (in base stage)
+${getFrameworkBuildRules(framework)}
 
 CONTAINER & LOCAL DEV FILES (include on first generation or when creating a new app):
 - ALWAYS output a docker-compose.yml with:
@@ -349,31 +437,14 @@ CONTAINER & LOCAL DEV FILES (include on first generation or when creating a new 
   - If using Prisma/Postgres, add a postgres service with POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB from env vars
   - If using Redis, add a redis service
   - Use a shared network for all services
-- ALWAYS output a .dockerignore with: node_modules, .next, .git, *.md, .env*.local, npm-debug.log, .DS_Store, dist, coverage, .turbo
-- ALWAYS output a .env.example listing every env var the app needs with placeholder values:
-  - DATABASE_URL=postgresql://user:password@localhost:5432/mydb
-  - REDIS_URL=redis://localhost:6379
-  - NEXTAUTH_SECRET=your-secret-here
-  - NEXTAUTH_URL=http://localhost:3000
-  - Any API keys as YOUR_API_KEY_HERE
-- ALWAYS output a README.md with these sections:
-  # App Name
-  Brief description.
-  ## Quick Start (local development)
-  1. Clone the repo
-  2. Copy .env.example to .env and fill in values
-  3. npm install
-  4. npx prisma generate && npx prisma db push (if using Prisma)
-  5. npm run dev → opens http://localhost:3000
-  ## Docker
-  1. Copy .env.example to .env and fill in values
-  2. docker compose up --build
-  ## Tech Stack
-  List frameworks, DB, auth, etc.
+- ALWAYS output a .dockerignore with: node_modules, ${framework === 'nextjs' ? '.next' : framework === 'nuxt' ? '.nuxt, .output' : 'dist'}, .git, *.md, .env*.local, npm-debug.log, .DS_Store, coverage
+- ALWAYS output a .env.example listing every env var the app needs with placeholder values
+- ALWAYS output a README.md with Quick Start, Docker, and Tech Stack sections
 - These files ensure the app works both locally and in container deployment
 
 NEVER MODIFY these files (they are managed by the platform):
-- .github/workflows/deploy.yml — NEVER touch the CI/CD workflow. Do NOT add test jobs, lint jobs, or extra steps.`
+${getFrameworkNeverModify(framework)}`
+}
 
 async function executeMaestroPipeline(
   fileContext: FileContext,
@@ -381,6 +452,7 @@ async function executeMaestroPipeline(
   publishEvent: (event: PipelineEvent) => void,
   plan?: string | null,
   codeResearch?: string | null,
+  framework: string = 'nextjs',
 ): Promise<PipelineResult> {
   const apiKey = await getOpenRouterKey()
   if (!apiKey) throw new Error('OpenRouter API key not configured')
@@ -399,7 +471,7 @@ async function executeMaestroPipeline(
     .join('\n')
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: MAESTRO_PLANNER_PROMPT },
+    { role: 'system', content: buildMaestroPrompt(framework) },
     {
       role: 'user',
       content: `Framework: ${fileContext.packageJson?.name || 'unknown'}
@@ -517,7 +589,7 @@ export async function runPipeline(
     if (classification.needsPlan && !project.plan) {
       // Run web research + code research in parallel
       const [researchContext, codeReport] = await Promise.all([
-        researchForPlan(message, publishEvent),
+        researchForPlan(message, publishEvent, project.framework),
         codeResearchPromise,
       ])
 
@@ -527,7 +599,7 @@ export async function runPipeline(
       const planContext = codeReport
         ? `${researchContext}\n\nEXISTING CODE ANALYSIS:\n${codeReport}`
         : researchContext
-      plan = await generatePlan(message, planContext, fileContext, publishEvent)
+      plan = await generatePlan(message, planContext, fileContext, publishEvent, project.framework)
 
       // Emit plan to client
       publishEvent({ event: 'plan_generated', data: { plan } })
@@ -547,12 +619,12 @@ export async function runPipeline(
   let result: PipelineResult
 
   if (classification.tier === 'maestro') {
-    result = await executeMaestroPipeline(fileContext, message, publishEvent, plan, codeResearchReport)
+    result = await executeMaestroPipeline(fileContext, message, publishEvent, plan, codeResearchReport, project.framework)
     if (plan) result.plan = plan
   } else {
     // Even direct tier gets plan context for follow-up edits
-    if (plan) result = await executeDirectPipeline(fileContext, `[Project Plan for context: ${plan.slice(0, 1000)}]\n\n${message}`, publishEvent)
-    else result = await executeDirectPipeline(fileContext, message, publishEvent)
+    if (plan) result = await executeDirectPipeline(fileContext, `[Project Plan for context: ${plan.slice(0, 1000)}]\n\n${message}`, publishEvent, project.framework)
+    else result = await executeDirectPipeline(fileContext, message, publishEvent, project.framework)
   }
 
   // 4. Commit file changes to GitHub

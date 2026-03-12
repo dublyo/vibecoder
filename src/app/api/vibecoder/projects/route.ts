@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { verifyToken, getAuthCookie } from '@/lib/auth'
-import { createRepo, scaffoldProjectRepo } from '@/lib/vibecoder/github'
+import { createRepo, createRepoFromTemplate } from '@/lib/vibecoder/github'
 import crypto from 'crypto'
 
 async function getUser(request: NextRequest) {
@@ -63,23 +63,18 @@ export async function POST(request: NextRequest) {
 
   try {
     if (importRepo) {
-      // Import existing repo — for now just reference it
+      // Import existing repo — just reference it
       githubRepo = importRepo
     } else {
-      // Create new repo
-      const templateName = template ? `vc-template-${framework}` : undefined
-      if (templateName) {
-        // Try template, fallback to empty repo
-        try {
-          const { fullName } = await (await import('@/lib/vibecoder/github')).createRepoFromTemplate(
-            templateName, repoName, description || `VibeCoder project: ${name}`,
-          )
-          githubRepo = fullName
-        } catch {
-          const { fullName } = await createRepo(repoName, description || `VibeCoder project: ${name}`)
-          githubRepo = fullName
-        }
-      } else {
+      // Always create from framework template (includes Dockerfile, CI/CD, Prisma, auth, etc.)
+      try {
+        const { fullName } = await createRepoFromTemplate(
+          framework, repoName, description || `VibeCoder project: ${name}`,
+        )
+        githubRepo = fullName
+      } catch (templateErr: any) {
+        // Fallback to empty repo if template doesn't exist
+        console.warn(`Template creation failed for ${framework}, falling back to empty repo: ${templateErr.message}`)
         const { fullName } = await createRepo(repoName, description || `VibeCoder project: ${name}`)
         githubRepo = fullName
       }
@@ -143,16 +138,12 @@ async function setupProject(projectId: string) {
   const project = await prisma.vcProject.findUnique({ where: { id: projectId } })
   if (!project) return
 
-  // Scaffold the repo with Dockerfile, GitHub Actions workflow, and starter files
+  // Template repos already include Dockerfile, GitHub Actions, Prisma, auth, etc.
+  // No scaffolding needed — repo was created from template in the POST handler.
+  // Just wait a moment for GitHub to finish generating the repo from template.
   if (!project.importedRepo && project.githubRepo) {
-    try {
-      console.log(`Scaffolding repo ${project.githubRepo} for ${project.framework}...`)
-      await scaffoldProjectRepo(project.githubRepo, project.framework, project.name)
-      console.log(`Scaffold complete for ${project.githubRepo}`)
-    } catch (err: any) {
-      console.error(`Scaffold failed for ${project.githubRepo}: ${err.message}`)
-      // Non-fatal — project can still work, user can add files via AI chat
-    }
+    await new Promise(r => setTimeout(r, 3000))
+    console.log(`Repo ${project.githubRepo} created from ${project.framework} template`)
   }
 
   const portainerApiKey = process.env.PORTAINER_API_KEY || ''

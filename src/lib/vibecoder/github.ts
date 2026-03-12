@@ -27,16 +27,31 @@ export interface FileContent {
   size: number
 }
 
-/** Create a repo from a template */
+// Template repos for each framework (must exist under GITHUB_OWNER and be marked as template repos)
+const TEMPLATE_REPOS: Record<string, string> = {
+  nextjs: 'vibecoder-template-nextjs',
+  nuxt: 'vibecoder-template-nuxt',
+  astro: 'vibecoder-template-astro',
+}
+
+/** Create a repo from a framework template. Includes Dockerfile, GitHub Actions, Prisma, auth, etc. */
 export async function createRepoFromTemplate(
-  templateRepo: string,
+  framework: string,
   newRepoName: string,
   description: string,
-  isPrivate = true,
+  isPrivate = false,
 ): Promise<{ fullName: string; htmlUrl: string }> {
+  const templateRepo = TEMPLATE_REPOS[framework]
+  if (!templateRepo) {
+    throw new Error(`No template for framework: ${framework}. Supported: ${Object.keys(TEMPLATE_REPOS).join(', ')}`)
+  }
+
   const res = await fetch(`${GITHUB_API}/repos/${GITHUB_OWNER}/${templateRepo}/generate`, {
     method: 'POST',
-    headers: getHeaders(),
+    headers: {
+      ...getHeaders(),
+      Accept: 'application/vnd.github+json',
+    },
     body: JSON.stringify({
       owner: GITHUB_OWNER,
       name: newRepoName,
@@ -47,7 +62,7 @@ export async function createRepoFromTemplate(
   })
   if (!res.ok) {
     const err = await res.json()
-    throw new Error(`Failed to create repo: ${err.message}`)
+    throw new Error(`Failed to create repo from template ${templateRepo}: ${err.message}`)
   }
   const data = await res.json()
   return { fullName: data.full_name, htmlUrl: data.html_url }
