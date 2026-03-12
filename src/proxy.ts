@@ -55,11 +55,21 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // Protect app pages (redirect to login)
-  if (pathname.startsWith('/chat') || pathname.startsWith('/vibecoder') || pathname.startsWith('/settings')) {
+  // Protect app pages (redirect to login if no valid token)
+  if (pathname === '/' || pathname.startsWith('/chat') || pathname.startsWith('/vibecoder') || pathname.startsWith('/settings') || pathname.startsWith('/stats') || pathname.startsWith('/skills') || pathname.startsWith('/mcp') || pathname.startsWith('/openbook')) {
     const token = req.cookies.get('vibecoder-token')?.value
     if (!token) {
       return NextResponse.redirect(new URL('/login', req.url))
+    }
+    // Also verify JWT for pages (not just existence)
+    if (JWT_SECRET) {
+      try {
+        await jwtVerify(token, JWT_SECRET)
+      } catch {
+        const response = NextResponse.redirect(new URL('/login', req.url))
+        response.cookies.delete('vibecoder-token')
+        return response
+      }
     }
   }
 
