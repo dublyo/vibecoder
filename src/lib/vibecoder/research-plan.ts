@@ -94,7 +94,7 @@ RULES:
 - Be specific, not generic. Include actual model names, field names, route paths.
 ${fwPatterns}
 - Use Prisma ORM for database access.
-- Use Tailwind CSS v4 for styling — write all UI from scratch, do NOT plan for shadcn/ui, @radix-ui, or headless UI.
+- Use Tailwind CSS v4 for styling — write ALL UI components from scratch using plain HTML + Tailwind classes. NEVER plan for shadcn/ui, @radix-ui, or headless UI (they are NOT installed). NEVER reference @/components/ui/ imports.
 - Include proper auth, validation, and error handling in the plan.
 - The plan should be comprehensive enough that another AI can follow it to build the entire app.
 - ALWAYS use the LATEST stable package versions. Current versions (March 2026):

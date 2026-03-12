@@ -38,7 +38,11 @@ function buildFixPrompt(framework: string): string {
 - If the error is about CSS "Module not found: Can't resolve './globals.css'":
   Fix the import path in layout.tsx to match the actual location (e.g. '../styles/globals.css')
 - ALWAYS output next.config.ts with typescript: { ignoreBuildErrors: true } and eslint: { ignoreDuringBuilds: true } when fixing type errors
-- If Prisma is used and Dockerfile doesn't have "npx prisma generate", output an updated Dockerfile with it`
+- If Prisma is used and Dockerfile doesn't have "npx prisma generate", output an updated Dockerfile with it
+- If the error mentions "Missing: <package> from lock file" or "npm ci" failing:
+  The Dockerfile uses "npm ci" which requires package-lock.json to match package.json exactly.
+  Fix by outputting an updated Dockerfile that uses "npm install --ignore-scripts" instead of "npm ci --ignore-scripts".
+  Also use "COPY package.json package-lock.json* ./" (with asterisk) so it works even without a lock file.`
 
   const componentStyle = framework === 'nuxt'
     ? `- ALWAYS write Vue SFCs (.vue) with <template>, <script setup lang="ts">, NEVER raw HTML files`
@@ -66,8 +70,8 @@ Rules:
 - For icons, use ${framework === 'nuxt' ? 'lucide-vue-next' : 'lucide-react'}. Do NOT use @heroicons or react-icons.
 - EVERY npm package you import MUST be in package.json. If it's missing, output an updated package.json.
 - If the error is "404 Not Found" or "ETARGET" or "not in this registry", the package does NOT EXIST. REMOVE it from package.json and rewrite the code to not use it.
-- DO NOT use @radix-ui packages. Use plain HTML + Tailwind CSS instead.
-- For UI components, write them from scratch using Tailwind CSS. Do NOT depend on shadcn/ui, @radix-ui, or headless UI libraries.
+- If the error is "Module not found: Can't resolve '@/components/ui/...'" — these shadcn/ui components DO NOT EXIST in the project. REMOVE all imports from "@/components/ui/" and rewrite using plain HTML + Tailwind CSS. For example, replace <Button> with <button className="bg-blue-600 text-white px-4 py-2 rounded">.
+- NEVER use @radix-ui packages, shadcn/ui, or headless UI libraries. Write ALL UI from scratch using plain HTML + Tailwind CSS.
 - Maintain existing code style
 - Include all imports
 ${componentStyle}

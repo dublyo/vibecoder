@@ -272,7 +272,7 @@ DEPENDENCY RULES:
 ${getFrameworkDeps(framework)}
 - EVERY npm package you import MUST be listed in package.json. If you import a new package, you MUST also output an updated package.json with it in dependencies.
 - Prefer built-in APIs and framework patterns over adding new packages when possible.
-- DO NOT use @radix-ui packages, shadcn/ui, or headless UI. Write UI components from scratch using Tailwind CSS.
+- NEVER import from "@/components/ui/" — those components do NOT exist in the project. NEVER use shadcn/ui, @radix-ui, or headless UI libraries. Write ALL UI components from scratch using plain HTML elements + Tailwind CSS classes. For example, instead of importing Button from "@/components/ui/button", just use <button className="bg-blue-600 text-white px-4 py-2 rounded">.
 - Only use packages you are CERTAIN exist on npm. If unsure, write the code yourself instead of importing a library.
 - Tailwind CSS v4 uses @import "tailwindcss" in CSS (NOT @tailwind directives). PostCSS config uses @tailwindcss/postcss plugin. No tailwind.config needed — use CSS variables and @theme for customization.
 
@@ -412,7 +412,7 @@ DEPENDENCY RULES:
 ${getFrameworkDeps(framework)}
 - EVERY npm package you import MUST be listed in package.json. If you import a new package, you MUST also output an updated package.json with it in dependencies.
 - Prefer built-in APIs and framework patterns over adding new packages when possible.
-- DO NOT use @radix-ui packages, shadcn/ui, or headless UI. Write UI components from scratch using Tailwind CSS.
+- NEVER import from "@/components/ui/" — those components do NOT exist in the project. NEVER use shadcn/ui, @radix-ui, or headless UI libraries. Write ALL UI components from scratch using plain HTML elements + Tailwind CSS classes. For example, instead of importing Button from "@/components/ui/button", just use <button className="bg-blue-600 text-white px-4 py-2 rounded">.
 - Only use packages you are CERTAIN exist on npm. If unsure, write the code yourself instead of importing a library.
 - Tailwind CSS v4 uses @import "tailwindcss" in CSS (NOT @tailwind directives). PostCSS config uses @tailwindcss/postcss plugin. No tailwind.config needed — use CSS variables and @theme for customization.
 

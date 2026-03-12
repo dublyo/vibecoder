@@ -18,14 +18,16 @@ export async function getFileTree(repo: string, projectId: string): Promise<File
   const redis = getRedis()
 
   if (redis) {
-    const cached = await redis.get(cacheKey)
-    if (cached) return JSON.parse(cached)
+    try {
+      const cached = await redis.get(cacheKey)
+      if (cached) return JSON.parse(cached)
+    } catch { /* Redis failure is non-fatal */ }
   }
 
   const tree = await fetchGitHubTree(repo)
 
   if (redis) {
-    await redis.set(cacheKey, JSON.stringify(tree), 'EX', 300) // 5 min TTL
+    try { await redis.set(cacheKey, JSON.stringify(tree), 'EX', 300) } catch {}
   }
 
   return tree
@@ -37,15 +39,17 @@ export async function getFile(repo: string, projectId: string, path: string): Pr
   const redis = getRedis()
 
   if (redis) {
-    const cached = await redis.get(cacheKey)
-    if (cached) return JSON.parse(cached)
+    try {
+      const cached = await redis.get(cacheKey)
+      if (cached) return JSON.parse(cached)
+    } catch { /* Redis failure is non-fatal */ }
   }
 
   const file = await fetchGitHubFile(repo, path)
   if (!file) return null
 
   if (redis) {
-    await redis.set(cacheKey, JSON.stringify(file), 'EX', 600) // 10 min TTL
+    try { await redis.set(cacheKey, JSON.stringify(file), 'EX', 600) } catch {}
   }
 
   return file
@@ -56,10 +60,12 @@ export async function invalidateFileCache(projectId: string, path?: string) {
   const redis = getRedis()
   if (!redis) return
 
-  if (path) {
-    await redis.del(`vc:${projectId}:file:${path}`)
-  }
-  await redis.del(`vc:${projectId}:tree`)
+  try {
+    if (path) {
+      await redis.del(`vc:${projectId}:file:${path}`)
+    }
+    await redis.del(`vc:${projectId}:tree`)
+  } catch { /* Redis failure is non-fatal */ }
 }
 
 /** Build complete file context for an AI request */
